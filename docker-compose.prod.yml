@@ -1,0 +1,58 @@
+# Продакшен: Caddy (HTTPS) -> сайт -> PostgreSQL. Назовні відкриті лише порти 80 і 443.
+# Запуск: docker compose -f docker-compose.prod.yml up -d --build
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grappshopp
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?задайте DB_PASSWORD у файлі .env}
+      POSTGRES_DB: grappshopp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # виконуються лише при першому створенні бази
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seed_prod.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grappshopp -d grappshopp"]
+      interval: 10s
+      retries: 10
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://grappshopp:${DB_PASSWORD}@db:5432/grappshopp
+      JWT_SECRET: ${JWT_SECRET:?задайте JWT_SECRET у файлі .env}
+      NODE_ENV: production
+      TRUST_PROXY: "1"
+      BASE_URL: https://${DOMAIN:?задайте DOMAIN у файлі .env}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-GRAPPSHOPP <no-reply@localhost>}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+    volumes:
+      - uploads:/data/uploads
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

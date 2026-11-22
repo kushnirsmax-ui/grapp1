@@ -1,0 +1,38 @@
+# Швидкий запуск: скопіюйте .env.example у .env, задайте JWT_SECRET і DB_PASSWORD, потім: docker compose up -d --build
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grappshopp
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?задайте DB_PASSWORD у файлі .env}
+      POSTGRES_DB: grappshopp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grappshopp"]
+      interval: 5s
+      retries: 10
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://grappshopp:${DB_PASSWORD}@db:5432/grappshopp
+      JWT_SECRET: ${JWT_SECRET:?задайте JWT_SECRET у файлі .env}
+      NODE_ENV: ${NODE_ENV:-development}   # у продакшені: production (потрібен HTTPS)
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-GRAPPSHOPP <no-reply@localhost>}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/data/uploads
+volumes:
+  pgdata:
+  uploads:

@@ -1,0 +1,11 @@
+# Caddy сам отримує й поновлює безкоштовний HTTPS-сертифікат Let's Encrypt.
+# DOMAIN береться з файлу .env (наприклад, grappshopp.ua)
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000
+}
+
+# Якщо додали DNS-запис для www — розкоментуйте, щоб www вів на основний домен:
+# www.{$DOMAIN} {
+# 	redir https://{$DOMAIN}{uri} permanent
+# }
